@@ -22,8 +22,20 @@ scripts:
       SQL_PARAM_CATALOG: ${var.catalog}
 
 targets:
+  # For building: names get a [dev <user>] / dev_<user>_ prefix, and schedules are paused.
   dev:
     mode: development
     default: true
     workspace:
       profile: free-edition # a CLI profile name, never the host: this repo is public
+
+  # The real daily run: unprefixed schemas (landing, bronze, silver, gold), schedule active.
+  # Same Free Edition workspace, because Free Edition has only one.
+  prod:
+    mode: production
+    workspace:
+      profile: free-edition
+      root_path: /Workspace/Users/${workspace.current_user.userName}/.bundle/${bundle.name}/${bundle.target}
+    permissions:
+      - user_name: ${workspace.current_user.userName}
+        level: CAN_MANAGE

@@ -7,6 +7,17 @@ resources:
       tags:
         project: databricks-football
 
+      # Daily after the late kick-offs. Paused automatically in the dev target (mode: development).
+      # No explicit pause_status: an explicit UNPAUSED would override that and run dev daily too.
+      schedule:
+        quartz_cron_expression: "0 0 6 * * ?"
+        timezone_id: Europe/Berlin
+
+      email_notifications:
+        on_failure:
+          - ${workspace.current_user.userName} # whoever deploys; keeps an address out of the repo
+        no_alert_for_skipped_runs: true
+
       parameters:
         # Leave both empty for normal runs: the task fetches from the first day that isn't settled
         # yet (the very first run is the full load from history_start) up to 6 days ahead.
