@@ -1,0 +1,6 @@
+resources:
+  schemas:
+    gold:
+      catalog_name: ${var.catalog}
+      name: gold
+      comment: Analysis-ready tables computed from silver, such as league standings.

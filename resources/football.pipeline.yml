@@ -13,3 +13,4 @@ resources:
       configuration:
         landing_root: /Volumes/${var.catalog}/${resources.schemas.landing.name}/${resources.volumes.api_responses.name}
         silver_schema: ${resources.schemas.silver.name} # dev mode prefixes schema names, so SQL can't hard-code them
+        gold_schema: ${resources.schemas.gold.name}
