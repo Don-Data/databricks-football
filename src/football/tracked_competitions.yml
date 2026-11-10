@@ -1,0 +1,31 @@
+# What we ingest, and since when.
+
+# The first day of match history. The first run loads everything from here (the full
+# load); later runs only fetch what isn't settled yet. 2025-08-01 is the start of the
+# 2025/26 season, which the free tier is known to serve. How far back it goes is untested.
+history_start: 2025-08-01
+
+# Free-tier competitions we've deliberately chosen to track.
+# Confirmed against /v4/competitions on 2026-07-27; still matches on 2026-11-10.
+# If the drift check flags a new one, decide deliberately: either add it to
+# competition_ids to ingest it, or to ignored_competition_ids to record that
+# we saw it and chose not to.
+competition_ids:
+  - 2013 # Campeonato Brasileiro Série A
+  - 2016 # Championship
+  - 2021 # Premier League
+  - 2001 # UEFA Champions League
+  - 2018 # European Championship
+  - 2015 # Ligue 1
+  - 2002 # Bundesliga
+  - 2019 # Serie A
+  - 2003 # Eredivisie
+  - 2017 # Primeira Liga
+  - 2152 # Copa Libertadores
+  - 2014 # Primera Division
+
+# Competitions the API offers that we've seen and deliberately don't ingest.
+# Listed explicitly so the drift check stays meaningful: anything in neither
+# list is genuinely new and should still fail loudly.
+ignored_competition_ids:
+  - 2000 # FIFA World Cup: not a league, doesn't fit the standings model

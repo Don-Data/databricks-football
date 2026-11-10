@@ -1,0 +1,66 @@
+resources:
+  jobs:
+    ingest:
+      name: football-ingest
+      max_concurrent_runs: 1
+      performance_target: STANDARD # scheduled batch, no deadline: the cheaper serverless mode
+      tags:
+        project: databricks-football
+
+      parameters:
+        # Leave both empty for normal runs: the task fetches from the first day that isn't settled
+        # yet (the very first run is the full load from history_start) up to 6 days ahead.
+        # Set them only to re-fetch a period on purpose, e.g. date_from=2026-08-01, date_to=2026-10-31.
+        - name: date_from
+          default: ""
+        - name: date_to
+          default: ""
+
+      environments:
+        - environment_key: ingest
+          spec:
+            environment_version: "6"
+            dependencies:
+              - dlt==1.32.0
+              - pyyaml==6.0.3
+
+      tasks:
+        - task_key: extract_competitions
+          environment_key: ingest
+          max_retries: 1
+          min_retry_interval_millis: 120000
+          timeout_seconds: 900
+          spark_python_task:
+            python_file: ../src/football/ingest.py
+            parameters:
+              - competitions
+              - --landing-root
+              - /Volumes/${var.catalog}/${resources.schemas.landing.name}/${resources.volumes.api_responses.name}
+              - --tracked
+              - ${workspace.file_path}/src/football/tracked_competitions.yml
+
+        - task_key: extract_matches
+          depends_on:
+            - task_key: extract_competitions
+          environment_key: ingest
+          max_retries: 1
+          min_retry_interval_millis: 120000
+          timeout_seconds: 1800
+          spark_python_task:
+            python_file: ../src/football/ingest.py
+            parameters:
+              - matches
+              - --landing-root
+              - /Volumes/${var.catalog}/${resources.schemas.landing.name}/${resources.volumes.api_responses.name}
+              - --tracked
+              - ${workspace.file_path}/src/football/tracked_competitions.yml
+              - --date-from
+              - "{{job.parameters.date_from}}"
+              - --date-to
+              - "{{job.parameters.date_to}}"
+
+        - task_key: run_pipeline
+          depends_on:
+            - task_key: extract_matches
+          pipeline_task: # runs in the job's performance mode (STANDARD)
+            pipeline_id: ${resources.pipelines.football.id}

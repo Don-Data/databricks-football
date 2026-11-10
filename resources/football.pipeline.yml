@@ -1,0 +1,14 @@
+resources:
+  pipelines:
+    football:
+      name: football-pipeline
+      catalog: ${var.catalog}
+      schema: ${resources.schemas.bronze.name} # default schema; later layers name their schema explicitly
+      serverless: true
+      continuous: false # triggered: each update processes what's new, then stops. The job triggers it.
+      root_path: ../src/pipeline
+      libraries:
+        - glob:
+            include: ../src/pipeline/**
+      configuration:
+        landing_root: /Volumes/${var.catalog}/${resources.schemas.landing.name}/${resources.volumes.api_responses.name}

@@ -1,0 +1,17 @@
+# Databricks bundle working files
+.databricks/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# Secrets and local configuration: never commit
+.env
+configuration.json
+
+# Test caches
+.pytest_cache/
+
+# Personal editor settings
+.vscode/

@@ -1,0 +1,6 @@
+resources:
+  schemas:
+    bronze:
+      catalog_name: ${var.catalog}
+      name: bronze
+      comment: Every landed API response, one row per match or competition, unchanged as VARIANT. Append-only.

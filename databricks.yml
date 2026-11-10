@@ -1,0 +1,29 @@
+bundle:
+  name: databricks-football
+
+include:
+  - resources/*.yml
+
+variables:
+  catalog:
+    description: Unity Catalog catalog for every object of this project. Created by `databricks bundle run setup`, not as a resource (see setup/catalog.sql).
+    default: football
+  warehouse_id:
+    description: SQL warehouse that runs the setup SQL.
+    lookup:
+      warehouse: Serverless Starter Warehouse # every Free Edition workspace has it
+
+scripts:
+  setup:
+    # One-time setup that a bundle resource can't do on Free Edition: create the catalog.
+    content: uv run python setup/run_sql.py setup/catalog.sql
+    env:
+      SQL_WAREHOUSE_ID: ${var.warehouse_id}
+      SQL_PARAM_CATALOG: ${var.catalog}
+
+targets:
+  dev:
+    mode: development
+    default: true
+    workspace:
+      profile: free-edition # a CLI profile name, never the host: this repo is public

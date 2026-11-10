@@ -1,0 +1,6 @@
+resources:
+  schemas:
+    landing:
+      catalog_name: ${var.catalog}
+      name: landing
+      comment: Raw API responses as files. Nothing here is parsed or reshaped.

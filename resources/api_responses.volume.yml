@@ -1,0 +1,10 @@
+resources:
+  volumes:
+    api_responses:
+      catalog_name: ${var.catalog}
+      schema_name: ${resources.schemas.landing.name}
+      name: api_responses
+      volume_type: MANAGED
+      comment: football-data.org responses, one JSON envelope per API request. Replay starts here.
+      lifecycle:
+        prevent_destroy: false
