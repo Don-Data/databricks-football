@@ -10,6 +10,11 @@ SELECT
   match:competition.id::bigint    AS competition_id,
   match:competition.code::string  AS competition_code,
   match:season.id::bigint         AS season_id,
+  CASE WHEN year(match:season.startDate::date) = year(match:season.endDate::date)
+       THEN cast(year(match:season.startDate::date) AS STRING)
+       ELSE concat(year(match:season.startDate::date), '/',
+                   right(cast(year(match:season.endDate::date) AS STRING), 2))
+  END                             AS season,          -- '2025/26' in Europe, '2026' in Brazil
   match:season.startDate::date    AS season_start_date,
   match:season.endDate::date      AS season_end_date,
   match:matchday::int             AS matchday,        -- empty for knockout rounds

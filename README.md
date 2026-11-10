@@ -18,9 +18,10 @@ A football data pipeline built entirely in Databricks, on the free Databricks Fr
 | `resources/football.pipeline.yml` | The Spark Declarative Pipeline (serverless, triggered by the job) |
 | `src/pipeline/bronze/*.sql` | Bronze streaming tables: Auto Loader (`read_files`) reads every landed file as `VARIANT`, one row per match or competition per fetch |
 | `resources/silver.schema.yml` | The `silver` schema |
-| `src/pipeline/silver/*.sql` | Silver: typed columns, and AUTO CDC keeps one row per match or competition, the version from the latest fetch (SCD Type 1) |
-| `resources/gold.schema.yml` | The `gold` schema |
-| `src/pipeline/gold/standings.sql` | Gold: the league table per competition and season (materialized view), only for seasons that are complete in the data |
+| `src/pipeline/silver/*.sql` | Silver: typed columns, and AUTO CDC keeps one row per match, competition and team, the version from the latest fetch (SCD Type 1). Teams are derived from the teams named in matches |
+| `resources/gold.schema.yml` | The `gold` schema: what consumers read |
+| `src/pipeline/gold/standings.sql` | The league table per competition and season (materialized view), only for seasons that are complete in the data |
+| `src/pipeline/gold/matches.sql`, `teams.sql` | Every match, and the team dimension (views: 1:1 projections of silver, no storage, always current) |
 | `src/football/ingest.py` | The extract logic: API calls via dlt's retrying `requests`, which days to fetch (derived from the landing), 10-day date windows, the competition drift check, landing |
 | `src/football/tracked_competitions.yml` | What gets ingested: `history_start` and which competitions are tracked or deliberately ignored |
 | `tests/test_ingest.py` | Unit tests for the fetch-range rules, date windows, the drift check and landing (no API, no Databricks) |

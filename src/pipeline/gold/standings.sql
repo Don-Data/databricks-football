@@ -36,12 +36,12 @@ complete_seasons AS (
 
 -- Every match twice: once from the home team's view, once from the away team's.
 team_matches AS (
-  SELECT competition_id, season_id, season_start_date, season_end_date,
+  SELECT competition_id, season_id, season,
          home_team_id AS team_id, home_team_name AS team_name,
          full_time_home AS goals_for, full_time_away AS goals_against
   FROM league_matches
   UNION ALL
-  SELECT competition_id, season_id, season_start_date, season_end_date,
+  SELECT competition_id, season_id, season,
          away_team_id, away_team_name,
          full_time_away, full_time_home
   FROM league_matches
@@ -51,8 +51,7 @@ totals AS (
   SELECT
     competition_id,
     season_id,
-    any_value(season_start_date)               AS season_start_date,
-    any_value(season_end_date)                 AS season_end_date,
+    any_value(season)                          AS season,
     team_id,
     any_value(team_name)                       AS team_name,
     count(*)                                   AS played,
@@ -71,10 +70,7 @@ SELECT
   c.competition_name,
   c.area_name,
   t.season_id,
-  CASE WHEN year(t.season_start_date) = year(t.season_end_date)
-       THEN cast(year(t.season_start_date) AS STRING)
-       ELSE concat(year(t.season_start_date), '/', right(cast(year(t.season_end_date) AS STRING), 2))
-  END                                          AS season,              -- '2025/26' or '2026'
+  t.season,                                                            -- '2025/26' or '2026', from silver
   rank() OVER (
     PARTITION BY t.competition_id, t.season_id
     ORDER BY 3 * t.won + t.drawn DESC, t.goals_for - t.goals_against DESC, t.goals_for DESC
