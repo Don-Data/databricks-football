@@ -17,11 +17,13 @@ A football data pipeline built entirely in Databricks, on the free Databricks Fr
 | `resources/bronze.schema.yml` | The `bronze` schema |
 | `resources/football.pipeline.yml` | The Spark Declarative Pipeline (serverless, triggered by the job) |
 | `src/pipeline/bronze/*.sql` | Bronze streaming tables: Auto Loader (`read_files`) reads every landed file as `VARIANT`, one row per match or competition per fetch |
+| `resources/silver.schema.yml` | The `silver` schema |
+| `src/pipeline/silver/*.sql` | Silver: typed columns, and AUTO CDC keeps one row per match or competition, the version from the latest fetch (SCD Type 1) |
 | `src/football/ingest.py` | The extract logic: API calls via dlt's retrying `requests`, which days to fetch (derived from the landing), 10-day date windows, the competition drift check, landing |
 | `src/football/tracked_competitions.yml` | What gets ingested: `history_start` and which competitions are tracked or deliberately ignored |
 | `tests/test_ingest.py` | Unit tests for the fetch-range rules, date windows, the drift check and landing (no API, no Databricks) |
 
-Next steps: silver via AUTO CDC, gold standings, then schedule and alerts.
+Next steps: gold standings, then schedule and alerts.
 
 ## Setup
 

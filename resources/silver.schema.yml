@@ -1,0 +1,6 @@
+resources:
+  schemas:
+    silver:
+      catalog_name: ${var.catalog}
+      name: silver
+      comment: One row per entity in its latest known state, with typed columns. Kept current by AUTO CDC from bronze.
