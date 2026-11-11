@@ -65,6 +65,8 @@ uv run pytest
 
 GitHub Actions runs the same tests and a lint on every push and pull request (`.github/workflows/tests.yml`). `bundle deploy` doesn't run them, so run them before deploying.
 
-## Data
+## License and data
+
+Code: MIT (see `LICENSE`). The football data comes from football-data.org and is subject to its terms; none of it is in this repo.
 
 Football data provided by the Football-Data.org API.
