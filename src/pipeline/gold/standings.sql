@@ -3,7 +3,7 @@
 -- Only leagues, and only their regular season: play-offs and relegation play-offs don't count
 -- towards the table, and cups have no single table. AWARDED matches count with their awarded score,
 -- as in the official table: Nantes - Toulouse 2025/26 was abandoned at 0-0, and the LFP confirmed
--- the 0-0. football-data.org's own table leaves that match out (see src/football/check_standings.py).
+-- the 0-0. football-data.org's own table leaves that match out (see gold/standings_check.sql).
 --
 -- Grouped by season from the start: the data holds several seasons per competition (2025/26 and
 -- 2026/27 in Europe, calendar years in Brazil), and a table across seasons would be wrong.
@@ -14,8 +14,9 @@
 -- history from its start date, so "matchday 1 is there" means "the whole season is there".
 --
 -- Known simplifications against official tables: ties are ranked by points, goal difference and
--- goals scored only (some leagues use head-to-head first), and point deductions aren't in the
--- match data. Tied teams share a position.
+-- goals scored only (Brazil counts wins first, some leagues head-to-head), and point deductions
+-- aren't in the match data (Southampton, Championship 2026/27: minus 4). Tied teams share a
+-- position. gold.standings_check shows where that makes a difference.
 
 -- The check: every game counts as exactly one of won, drawn or lost. A finished match without a
 -- score would count as played but as none of the three. (Points need no check: they're defined

@@ -27,4 +27,8 @@ GROUP BY competition_code, season_id, team_id
 UNION ALL
 SELECT 'home_advantage', concat_ws('/', competition_code, season, team_id), count(*)
 FROM ${gold_schema}.home_advantage
-GROUP BY competition_code, season, team_id;
+GROUP BY competition_code, season, team_id
+UNION ALL
+SELECT 'standings_check', concat_ws('/', competition_code, season_id, team_id), count(*)
+FROM ${gold_schema}.standings_check
+GROUP BY competition_code, season_id, team_id;

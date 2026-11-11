@@ -17,8 +17,10 @@ from football.ingest import (
     first_unsettled_day,
     land,
     landed_match_requests,
+    latest_landed,
     load_tracked,
     matches_range,
+    tracked_leagues,
 )
 
 TRACKED_FILE = Path(__file__).resolve().parents[1] / "src" / "football" / "tracked_competitions.yml"
@@ -139,3 +141,26 @@ def test_a_day_fetched_before_it_ended_is_not_settled() -> None:
 def test_lookback_never_reaches_before_history_start() -> None:
     recent_start = TODAY - timedelta(days=1)
     assert next_range([], history_start=recent_start)[0] == recent_start
+
+
+def test_standings_are_fetched_for_tracked_leagues_only() -> None:
+    payload: Json = {
+        "competitions": [
+            {"id": 2021, "type": "LEAGUE"},  # tracked league
+            {"id": 2001, "type": "CUP"},  # tracked cup: no single table
+            {"id": 2000, "type": "CUP"},  # not tracked
+            {"id": 2002, "type": "LEAGUE"},  # tracked league
+            {"id": 9999, "type": "LEAGUE"},  # a league we don't track
+        ]
+    }
+    assert tracked_leagues(payload, [2021, 2001, 2002]) == [2002, 2021]
+
+
+def test_latest_landed_is_the_newest_file_by_name(tmp_path: Path) -> None:
+    folder = tmp_path / "competitions"
+    for day, stamp in [("2026/11/09", "20261109T040000"), ("2026/11/11", "20261111T050000"), ("2026/11/10", "20261110T060000")]:
+        (folder / day).mkdir(parents=True)
+        (folder / day / f"{stamp}_abcd1234.json").write_text(json.dumps({"fetched_at": stamp}), encoding="utf-8")
+    assert latest_landed(str(tmp_path), "competitions") == {"fetched_at": "20261111T050000"}
+    with pytest.raises(FileNotFoundError):
+        latest_landed(str(tmp_path), "standings")

@@ -11,9 +11,13 @@ see which days are already settled. The first run therefore is the full load
 from history_start, a run after an outage catches up, and a deleted file is
 simply fetched again.
 
+The league tables football-data.org publishes land too, for the current season of every
+tracked league: the pipeline compares them with the tables it computes (gold/standings_check.sql).
+
 Run as Lakeflow Job tasks (see resources/ingest.job.yml):
   ingest.py competitions --landing-root /Volumes/... --tracked .../tracked_competitions.yml
   ingest.py matches      --landing-root /Volumes/... --tracked ... [--date-from YYYY-MM-DD --date-to YYYY-MM-DD]
+  ingest.py standings    --landing-root /Volumes/... --tracked ...
 """
 
 from __future__ import annotations
@@ -50,13 +54,13 @@ MATCHES_FILE_NAME = re.compile(r"^(\d{8})T\d{6}_(\d{4}-\d{2}-\d{2})_(\d{4}-\d{2}
 # --- API access -------------------------------------------------------------
 
 
-def api_token() -> str:
+def _api_token() -> str:
     from databricks.sdk.runtime import dbutils  # only exists on Databricks compute
 
     return dbutils.secrets.get(SECRET_SCOPE, SECRET_KEY)
 
 
-def api_get(path: str, params: Params, token: str) -> requests.Response:
+def _get(path: str, params: Params, token: str) -> requests.Response:
     response = requests.get(f"{BASE_URL}{path}", headers={"X-Auth-Token": token}, params=params, timeout=30)
     response.raise_for_status()  # 4xx other than 429 is our mistake: fail instead of retrying
     _respect_rate_limit(response)
@@ -97,6 +101,15 @@ def land(landing_root: str, resource: str, path: str, params: Params, payload: J
     target.write_text(json.dumps(envelope), encoding="utf-8")
     print(f"Landed {target}")
     return str(target)
+
+
+def latest_landed(landing_root: str, resource: str) -> Json:
+    """The envelope of the newest landed file of a resource. File names start with the fetch time,
+    so the newest file is the last one by name."""
+    files = sorted((Path(landing_root) / resource).rglob("*.json"), key=lambda file: file.name)
+    if not files:
+        raise FileNotFoundError(f"Nothing landed yet in {Path(landing_root) / resource}")
+    return json.loads(files[-1].read_text(encoding="utf-8"))
 
 
 class LandedRequest(NamedTuple):
@@ -158,6 +171,11 @@ def check_for_new_competitions(payload: Json, tracked: list[int], ignored: list[
         )
 
 
+def tracked_leagues(competitions_payload: Json, tracked: list[int]) -> list[int]:
+    """The tracked competitions that are leagues: only they have one table per season."""
+    return sorted(c["id"] for c in competitions_payload["competitions"] if c["id"] in tracked and c["type"] == "LEAGUE")
+
+
 def first_unsettled_day(landed: Iterable[LandedRequest], history_start: date, today: date) -> date:
     """The earliest day since history_start whose results we don't have yet.
 
@@ -201,7 +219,7 @@ def date_windows(start: date, end: date, max_days: int = MAX_WINDOW_DAYS) -> Ite
 
 
 def extract_competitions(landing_root: str, tracked: Tracked, token: str) -> str:
-    payload: Json = api_get("/competitions", {}, token).json()
+    payload: Json = _get("/competitions", {}, token).json()
     landed = land(landing_root, "competitions", "/competitions", {}, payload)
     # Land first, check second: if the check fails, the payload is there to inspect.
     check_for_new_competitions(payload, tracked.competition_ids, tracked.ignored_competition_ids)
@@ -213,10 +231,25 @@ def extract_matches(landing_root: str, tracked: Tracked, token: str, date_from: 
     landed: list[str] = []
     for window_from, api_date_to in date_windows(date_from, date_to):
         params: Params = {"dateFrom": window_from.isoformat(), "dateTo": api_date_to.isoformat(), "competitions": competitions}
-        payload: Json = api_get("/matches", params, token).json()
+        payload: Json = _get("/matches", params, token).json()
         suffix = f"{params['dateFrom']}_{params['dateTo']}"
         landed.append(land(landing_root, "matches", "/matches", params, payload, name_suffix=suffix))
     print(f"Landed {len(landed)} file(s) for {date_from} .. {date_to}")
+    return landed
+
+
+def extract_standings(landing_root: str, tracked: Tracked, token: str) -> list[str]:
+    """Land the published table of every tracked league, current season (no ?season=).
+
+    Which competitions are leagues comes from the /competitions response the same run has just
+    landed (the task runs after extract_competitions), so nothing here needs configuring."""
+    competitions = latest_landed(landing_root, "competitions")["response"]
+    landed: list[str] = []
+    for competition_id in tracked_leagues(competitions, tracked.competition_ids):
+        path = f"/competitions/{competition_id}/standings"
+        payload: Json = _get(path, {}, token).json()
+        landed.append(land(landing_root, "standings", path, {}, payload, name_suffix=str(competition_id)))
+    print(f"Landed {len(landed)} published table(s)")
     return landed
 
 
@@ -225,7 +258,7 @@ def extract_matches(landing_root: str, tracked: Tracked, token: str, date_from: 
 
 def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("resource", choices=["competitions", "matches"])
+    parser.add_argument("resource", choices=["competitions", "matches", "standings"])
     parser.add_argument("--landing-root", required=True, help="/Volumes/<catalog>/<schema>/<volume>")
     parser.add_argument("--tracked", required=True, help="path to tracked_competitions.yml")
     parser.add_argument("--date-from", default="", help="YYYY-MM-DD; empty = first unsettled day (see matches_range)")
@@ -235,9 +268,12 @@ def main(argv: list[str] | None = None) -> None:
     args = parser.parse_args(argv)
 
     tracked = load_tracked(args.tracked)
-    token = api_token()
+    token = _api_token()
     if args.resource == "competitions":
         extract_competitions(args.landing_root, tracked, token)
+        return
+    if args.resource == "standings":
+        extract_standings(args.landing_root, tracked, token)
         return
 
     today = datetime.now(UTC).date()
