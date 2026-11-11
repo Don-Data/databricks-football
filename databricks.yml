@@ -12,6 +12,12 @@ variables:
     description: SQL warehouse that runs the setup SQL.
     lookup:
       warehouse: Serverless Starter Warehouse # every Free Edition workspace has it
+  operator:
+    description: The person who gets the job's failure emails, and CAN_MANAGE in prod. Defaults to whoever deploys. CI sets it, because there the deployer is the service principal.
+    default: ${workspace.current_user.userName}
+  prod_service_principal:
+    description: Application ID of the service principal that deploys and runs prod. Looked up by name in the prod target.
+    default: "" # unused outside prod
 
 scripts:
   setup:
@@ -20,6 +26,19 @@ scripts:
     env:
       SQL_WAREHOUSE_ID: ${var.warehouse_id}
       SQL_PARAM_CATALOG: ${var.catalog}
+  grant_prod_access:
+    # One-time bootstrap for CI/CD, run by an admin with -t prod: the access the prod service
+    # principal needs before its first deploy (see setup/grant_prod_access.py).
+    content: uv run python setup/grant_prod_access.py
+    env:
+      SP_APPLICATION_ID: ${var.prod_service_principal}
+      CATALOG: ${var.catalog}
+      # Scripts can't reference resources, so these are the prod names (unprefixed in production mode).
+      SCHEMAS: landing,bronze,silver,gold
+      SECRET_SCOPE: football # the scope src/football/ingest.py reads the API token from
+      WAREHOUSE_ID: ${var.warehouse_id}
+      JOB_NAME: football-ingest
+      PIPELINE_NAME: football-pipeline
 
 targets:
   # For building: names get a [dev <user>] / dev_<user>_ prefix, and schedules are paused.
@@ -37,9 +56,21 @@ targets:
     # "not on the right Git branch". `--force` overrides it; `validate` doesn't check it.
     git:
       branch: main
+    # GitHub Actions deploys prod as this service principal, and the job and pipeline run as it.
+    # Created once by hand (see README); found by name, so its ID isn't in the repo.
+    variables:
+      prod_service_principal:
+        lookup:
+          service_principal: github-actions-football
+    run_as:
+      service_principal_name: ${var.prod_service_principal}
     workspace:
       profile: free-edition
-      root_path: /Workspace/Users/${workspace.current_user.userName}/.bundle/${bundle.name}/${bundle.target}
+      # Fixed, not ~: the deployment state lives here, and it must be the same for CI and a
+      # manual deploy, or a deploy by someone else would create everything a second time.
+      root_path: /Workspace/Users/${var.prod_service_principal}/.bundle/${bundle.name}/${bundle.target}
     permissions:
-      - user_name: ${workspace.current_user.userName}
+      - service_principal_name: ${var.prod_service_principal}
+        level: CAN_MANAGE
+      - user_name: ${var.operator}
         level: CAN_MANAGE
