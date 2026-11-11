@@ -1,15 +1,11 @@
 """Unit tests for the pure business rules in src/football/ingest.py. No API, no Databricks."""
 
+import itertools
 import json
-import sys
 from datetime import date, timedelta
 from pathlib import Path
 
 import pytest
-
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
-
-import itertools
 
 from football.ingest import (
     DEFAULT_LOOKAHEAD_DAYS,

@@ -1,0 +1,21 @@
+# Unit tests and lint on every push to main and every pull request.
+# Needs no secrets: the tests touch neither the API nor Databricks.
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      # Actions pinned to a commit, not a tag: a tag can be moved, a commit can't.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+      - run: uv run --locked pytest
+      - run: uvx ruff check src tests setup

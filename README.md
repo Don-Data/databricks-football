@@ -25,6 +25,7 @@ A football data pipeline built entirely in Databricks, on the free Databricks Fr
 | `src/football/ingest.py` | The extract logic: API calls via dlt's retrying `requests`, which days to fetch (derived from the landing), 10-day date windows, the competition drift check, landing |
 | `src/football/tracked_competitions.yml` | What gets ingested: `history_start` and which competitions are tracked or deliberately ignored |
 | `tests/test_ingest.py` | Unit tests for the fetch-range rules, date windows, the drift check and landing (no API, no Databricks) |
+| `.github/workflows/tests.yml` | CI: the tests and a lint on every push and pull request, without secrets |
 
 **Two targets in the same workspace.** `dev` is for building: names get a `[dev <user>]` or `dev_<user>_` prefix, and the schedule is paused. `prod` is the real daily run, with unprefixed schemas `landing`, `bronze`, `silver` and `gold`. Each target has its own landing volume, so the first run of each is a full load.
 
@@ -59,8 +60,10 @@ databricks bundle deploy -t prod                                       # the sch
 ## Tests
 
 ```
-uv run pytest tests
+uv run pytest
 ```
+
+GitHub Actions runs the same tests and a lint on every push and pull request (`.github/workflows/tests.yml`). `bundle deploy` doesn't run them, so run them before deploying.
 
 ## Data
 
