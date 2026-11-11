@@ -11,6 +11,7 @@ A football data pipeline built entirely in Databricks, on the free Databricks Fr
 | `databricks.yml` | The bundle: variables, the `setup` script, and the `dev` and `prod` targets |
 | `setup/catalog.sql` | The catalog. It's the one object a bundle resource can't create on Free Edition |
 | `setup/run_sql.py` | Runs a SQL file on the SQL warehouse; called by `databricks bundle run setup` |
+| `setup/grant_prod_access.py` | The one-time access grants and the ownership transfer for the prod service principal; called by `databricks bundle run grant_prod_access -t prod` |
 | `resources/landing.schema.yml` | The `landing` schema (bronze, silver and gold get their own later) |
 | `resources/api_responses.volume.yml` | The landing volume: raw API responses, one JSON envelope per request, protected against `bundle destroy` |
 | `resources/ingest.job.yml` | The Lakeflow Job: `extract_competitions` → `extract_matches` → `run_pipeline` on serverless, daily at 06:00 Europe/Berlin, with an email on failure |
@@ -27,7 +28,7 @@ A football data pipeline built entirely in Databricks, on the free Databricks Fr
 | `tests/test_ingest.py` | Unit tests for the fetch-range rules, date windows, the drift check and landing (no API, no Databricks) |
 | `.github/workflows/tests.yml` | CI: the tests and a lint on every push and pull request, without secrets |
 
-**Two targets in the same workspace.** `dev` is for building: names get a `[dev <user>]` or `dev_<user>_` prefix, and the schedule is paused. `prod` is the real daily run, with unprefixed schemas `landing`, `bronze`, `silver` and `gold`. Each target has its own landing volume, so the first run of each is a full load. `prod` deploys only from `main`: changes go in through a pull request, and the prod target names `main` as its branch, so `bundle deploy -t prod` from any other branch stops with "not on the right Git branch".
+**Two targets in the same workspace.** `dev` is for building: names get a `[dev <user>]` or `dev_<user>_` prefix, and the schedule is paused. `prod` is the real daily run, with unprefixed schemas `landing`, `bronze`, `silver` and `gold`. Each target has its own landing volume, so the first run of each is a full load. `prod` deploys only from `main`: changes go in through a pull request, and the prod target names `main` as its branch, so `bundle deploy -t prod` from any other branch stops with "not on the right Git branch". Prod is deployed by the service principal `github-actions-football`, and the job and pipeline run as it.
 
 ## Setup
 
@@ -51,9 +52,9 @@ databricks bundle validate --strict -t dev
 databricks bundle deploy -t dev
 databricks bundle run ingest -t dev                                    # fetches whatever isn't settled yet
 databricks bundle run ingest -t dev --params date_from=2026-08-01,date_to=2026-08-31   # re-fetch a period on purpose
-
-databricks bundle deploy -t prod                                       # the scheduled daily run
 ```
+
+Don't deploy prod from a laptop. The bundle makes the deployer the owner of the job and the pipeline, and the service principal can only deploy what it owns.
 
 **Which days a run fetches.** There's no separate watermark. Every matches file name carries the window it requested, for example `20261110T143558_2026-11-07_2026-11-17_df315d6c.json`, so a run sees from the file names alone which days are settled. A day is settled once a request covered it after it had ended. A run fetches from the first unsettled day since `history_start`, always at least 3 days back for late corrections, up to 6 days ahead. So the first run is the full load, a normal day is a single request, a run after an outage catches up by itself, and a deleted file is simply fetched again.
 

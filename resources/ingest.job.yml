@@ -15,7 +15,7 @@ resources:
 
       email_notifications:
         on_failure:
-          - ${workspace.current_user.userName} # whoever deploys; keeps an address out of the repo
+          - ${var.operator} # the deployer by default, set by CI; keeps an address out of the repo
         no_alert_for_skipped_runs: true
 
       parameters:
