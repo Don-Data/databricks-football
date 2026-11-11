@@ -23,6 +23,8 @@ A football data pipeline built entirely in Databricks, on the free Databricks Fr
 | `resources/gold.schema.yml` | The `gold` schema: what consumers read |
 | `src/pipeline/gold/standings.sql` | The league table per competition and season (materialized view), only for seasons that are complete in the data |
 | `src/pipeline/gold/matches.sql`, `teams.sql` | Every match, and the team dimension (views: 1:1 projections of silver, no storage, always current) |
+| `src/pipeline/gold/home_advantage.sql` | Every team's home and away record per competition and season (a view, counts only), from finished matches with a real home side |
+| `resources/home_advantage.dashboard.yml`, `src/dashboards/home_advantage.lvdash.json` | The AI/BI dashboard on it: how much more teams win at home, by competition and by team |
 | `src/football/ingest.py` | The extract logic: API calls via dlt's retrying `requests`, which days to fetch (derived from the landing), 10-day date windows, the competition drift check, landing |
 | `src/football/tracked_competitions.yml` | What gets ingested: `history_start` and which competitions are tracked or deliberately ignored |
 | `tests/test_ingest.py` | Unit tests for the fetch-range rules, date windows, the drift check and landing (no API, no Databricks) |
@@ -67,6 +69,21 @@ uv run pytest
 ```
 
 GitHub Actions runs the same tests and a lint on every push and pull request (`.github/workflows/ci.yml`). `bundle deploy` doesn't run them, so run them before deploying dev.
+
+## Home advantage
+
+`gold.home_advantage` holds every team's home and away record per competition and season. It covers league matches of the regular season, and cup matches except finals, which are played at a neutral venue. A match decided on penalties counts as the draw it was: football-data.org's full-time score includes the penalties, so the view subtracts them. The view holds counts only, so it adds up across teams and seasons. Compute ratios as ratios of sums.
+
+The dashboard `Home advantage` sits on top of it. The deploy publishes it, and viewers query with their own permissions:
+
+```
+databricks bundle open home_advantage -t dev
+```
+
+As of 2026-11-11, over 4,803 matches:
+- The home team took 57.7% of the points, where 50% would mean no home advantage.
+- Brazil's Série A is highest (64%), and Italy's Serie A is lowest (53%).
+- Not one of the 40 Brazilian team-seasons with at least 10 home and 10 away games did better away. In Serie A 2025/26, 6 of 20 teams did.
 
 ## Checking gold against the API
 

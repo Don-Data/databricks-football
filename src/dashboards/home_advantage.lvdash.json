@@ -1,0 +1,765 @@
+{
+  "datasets": [
+    {
+      "name": "ds_teams",
+      "displayName": "Home and away records",
+      "queryLines": [
+        "SELECT\n",
+        "  competition_name, competition_type, season, team_name,\n",
+        "  home_played, home_won, home_drawn, home_lost, home_points,\n",
+        "  away_played, away_points,\n",
+        "  try_divide(home_points, home_played) AS home_ppg,\n",
+        "  try_divide(away_points, away_played) AS away_ppg,\n",
+        "  try_divide(home_points, home_played) - try_divide(away_points, away_played) AS ppg_gap,\n",
+        "  home_played >= 10 AND away_played >= 10 AS enough_games,\n",
+        "  CASE WHEN try_divide(away_points, away_played) > try_divide(home_points, home_played) THEN 1 ELSE 0 END AS better_away\n",
+        "FROM home_advantage\n",
+        "ORDER BY ppg_gap DESC\n"
+      ],
+      "columns": [
+        {
+          "displayName": "Matches",
+          "description": "Matches with a home side, each counted once (from the home team's row)",
+          "expression": "SUM(`home_played`)"
+        },
+        {
+          "displayName": "Home share of points",
+          "description": "The home team's points as a share of all points. 50% = no home advantage",
+          "expression": "SUM(`home_points`) / (SUM(`home_points`) + SUM(`away_points`))"
+        },
+        {
+          "displayName": "Home wins",
+          "description": "Share of matches the home team won",
+          "expression": "SUM(`home_won`) / SUM(`home_played`)"
+        },
+        {
+          "displayName": "Draws",
+          "description": "Share of matches drawn",
+          "expression": "SUM(`home_drawn`) / SUM(`home_played`)"
+        },
+        {
+          "displayName": "Away wins",
+          "description": "Share of matches the away team won",
+          "expression": "SUM(`home_lost`) / SUM(`home_played`)"
+        },
+        {
+          "displayName": "Teams better away",
+          "description": "Share of teams with more points per game away than at home",
+          "expression": "AVG(`better_away`)"
+        }
+      ]
+    }
+  ],
+  "pages": [
+    {
+      "name": "home_advantage",
+      "displayName": "Home advantage",
+      "pageType": "PAGE_TYPE_CANVAS",
+      "layoutVersion": "GRID_V1",
+      "layout": [
+        {
+          "widget": {
+            "name": "header",
+            "multilineTextboxSpec": {
+              "lines": [
+                "## Home advantage: how much more teams win at home\n",
+                "\n",
+                "Every finished match with a home side since August 2025, in 9 leagues and 2 cups. If playing at home didn't matter, the home team would take 50% of the points."
+              ]
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 0,
+            "width": 12,
+            "height": 2
+          }
+        },
+        {
+          "widget": {
+            "name": "filter_season",
+            "queries": [
+              {
+                "name": "filter_season_q",
+                "query": {
+                  "datasetName": "ds_teams",
+                  "fields": [
+                    {
+                      "name": "season",
+                      "expression": "`season`"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "filter-multi-select",
+              "encodings": {
+                "fields": [
+                  {
+                    "fieldName": "season",
+                    "displayName": "Season",
+                    "queryName": "filter_season_q"
+                  }
+                ]
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Season"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 2,
+            "width": 4,
+            "height": 2
+          }
+        },
+        {
+          "widget": {
+            "name": "filter_type",
+            "queries": [
+              {
+                "name": "filter_type_q",
+                "query": {
+                  "datasetName": "ds_teams",
+                  "fields": [
+                    {
+                      "name": "competition_type",
+                      "expression": "`competition_type`"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "filter-multi-select",
+              "encodings": {
+                "fields": [
+                  {
+                    "fieldName": "competition_type",
+                    "displayName": "Competition type",
+                    "queryName": "filter_type_q"
+                  }
+                ]
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Competition type"
+              }
+            }
+          },
+          "position": {
+            "x": 4,
+            "y": 2,
+            "width": 4,
+            "height": 2
+          }
+        },
+        {
+          "widget": {
+            "name": "filter_competition",
+            "queries": [
+              {
+                "name": "filter_competition_q",
+                "query": {
+                  "datasetName": "ds_teams",
+                  "fields": [
+                    {
+                      "name": "competition_name",
+                      "expression": "`competition_name`"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "filter-multi-select",
+              "encodings": {
+                "fields": [
+                  {
+                    "fieldName": "competition_name",
+                    "displayName": "Competition",
+                    "queryName": "filter_competition_q"
+                  }
+                ]
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Competition"
+              }
+            }
+          },
+          "position": {
+            "x": 8,
+            "y": 2,
+            "width": 4,
+            "height": 2
+          }
+        },
+        {
+          "widget": {
+            "name": "kpi_home_share",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_teams",
+                  "fields": [
+                    {
+                      "name": "measure(Home share of points)",
+                      "expression": "MEASURE(`Home share of points`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "measure(Home share of points)",
+                  "displayName": "Home team's share of points",
+                  "format": {
+                    "type": "number-percent",
+                    "decimalPlaces": {
+                      "type": "exact",
+                      "places": 1
+                    }
+                  }
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Home team's share of points"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 4,
+            "width": 3,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "kpi_home_wins",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_teams",
+                  "fields": [
+                    {
+                      "name": "measure(Home wins)",
+                      "expression": "MEASURE(`Home wins`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "measure(Home wins)",
+                  "displayName": "Home wins",
+                  "format": {
+                    "type": "number-percent",
+                    "decimalPlaces": {
+                      "type": "exact",
+                      "places": 1
+                    }
+                  }
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Home wins"
+              }
+            }
+          },
+          "position": {
+            "x": 3,
+            "y": 4,
+            "width": 3,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "kpi_draws",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_teams",
+                  "fields": [
+                    {
+                      "name": "measure(Draws)",
+                      "expression": "MEASURE(`Draws`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "measure(Draws)",
+                  "displayName": "Draws",
+                  "format": {
+                    "type": "number-percent",
+                    "decimalPlaces": {
+                      "type": "exact",
+                      "places": 1
+                    }
+                  }
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Draws"
+              }
+            }
+          },
+          "position": {
+            "x": 6,
+            "y": 4,
+            "width": 3,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "kpi_away_wins",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_teams",
+                  "fields": [
+                    {
+                      "name": "measure(Away wins)",
+                      "expression": "MEASURE(`Away wins`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "measure(Away wins)",
+                  "displayName": "Away wins",
+                  "format": {
+                    "type": "number-percent",
+                    "decimalPlaces": {
+                      "type": "exact",
+                      "places": 1
+                    }
+                  }
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Away wins"
+              }
+            }
+          },
+          "position": {
+            "x": 9,
+            "y": 4,
+            "width": 3,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "chart_home_share",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_teams",
+                  "fields": [
+                    {
+                      "name": "competition_name",
+                      "expression": "`competition_name`"
+                    },
+                    {
+                      "name": "measure(Home share of points)",
+                      "expression": "MEASURE(`Home share of points`)"
+                    },
+                    {
+                      "name": "measure(Matches)",
+                      "expression": "MEASURE(`Matches`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "bar",
+              "encodings": {
+                "x": {
+                  "fieldName": "measure(Home share of points)",
+                  "scale": {
+                    "type": "quantitative"
+                  },
+                  "format": {
+                    "type": "number-percent",
+                    "decimalPlaces": {
+                      "type": "exact",
+                      "places": 0
+                    }
+                  },
+                  "displayName": "Home team's share of points",
+                  "axis": {
+                    "title": "Home team's share of points"
+                  }
+                },
+                "y": {
+                  "fieldName": "competition_name",
+                  "scale": {
+                    "type": "categorical",
+                    "sort": {
+                      "by": "x-reversed"
+                    }
+                  },
+                  "displayName": "Competition",
+                  "axis": {
+                    "title": "Competition"
+                  }
+                },
+                "extra": [
+                  {
+                    "fieldName": "measure(Matches)",
+                    "displayName": "Matches"
+                  }
+                ]
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Home team's share of points, by competition",
+                "showDescription": true,
+                "description": "50% would mean no home advantage."
+              },
+              "annotations": [
+                {
+                  "type": "vertical-line",
+                  "encodings": {
+                    "x": {
+                      "dataValue": "0.5",
+                      "dataType": "DOUBLE"
+                    },
+                    "label": {
+                      "value": "No home advantage"
+                    },
+                    "color": {
+                      "value": "#8a8983"
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 7,
+            "width": 6,
+            "height": 7
+          }
+        },
+        {
+          "widget": {
+            "name": "chart_better_away",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_teams",
+                  "fields": [
+                    {
+                      "name": "competition_name",
+                      "expression": "`competition_name`"
+                    },
+                    {
+                      "name": "measure(Teams better away)",
+                      "expression": "MEASURE(`Teams better away`)"
+                    },
+                    {
+                      "name": "count(team_name)",
+                      "expression": "COUNT(`team_name`)"
+                    }
+                  ],
+                  "disaggregated": false,
+                  "filters": [
+                    {
+                      "expression": "`enough_games`"
+                    }
+                  ]
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "bar",
+              "encodings": {
+                "x": {
+                  "fieldName": "measure(Teams better away)",
+                  "scale": {
+                    "type": "quantitative"
+                  },
+                  "format": {
+                    "type": "number-percent",
+                    "decimalPlaces": {
+                      "type": "exact",
+                      "places": 0
+                    }
+                  },
+                  "displayName": "Teams better away",
+                  "axis": {
+                    "title": "Teams better away"
+                  }
+                },
+                "y": {
+                  "fieldName": "competition_name",
+                  "scale": {
+                    "type": "categorical",
+                    "sort": {
+                      "by": "x-reversed"
+                    }
+                  },
+                  "displayName": "Competition",
+                  "axis": {
+                    "title": "Competition"
+                  }
+                },
+                "extra": [
+                  {
+                    "fieldName": "count(team_name)",
+                    "displayName": "Teams"
+                  }
+                ]
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Teams that did better away than at home",
+                "showDescription": true,
+                "description": "Share of teams with more points per game away. Teams with at least 10 home and 10 away games."
+              }
+            }
+          },
+          "position": {
+            "x": 6,
+            "y": 7,
+            "width": 6,
+            "height": 7
+          }
+        },
+        {
+          "widget": {
+            "name": "table_teams",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_teams",
+                  "fields": [
+                    {
+                      "name": "competition_name",
+                      "expression": "`competition_name`"
+                    },
+                    {
+                      "name": "season",
+                      "expression": "`season`"
+                    },
+                    {
+                      "name": "team_name",
+                      "expression": "`team_name`"
+                    },
+                    {
+                      "name": "home_played",
+                      "expression": "`home_played`"
+                    },
+                    {
+                      "name": "home_ppg",
+                      "expression": "`home_ppg`"
+                    },
+                    {
+                      "name": "away_played",
+                      "expression": "`away_played`"
+                    },
+                    {
+                      "name": "away_ppg",
+                      "expression": "`away_ppg`"
+                    },
+                    {
+                      "name": "ppg_gap",
+                      "expression": "`ppg_gap`"
+                    }
+                  ],
+                  "disaggregated": true,
+                  "filters": [
+                    {
+                      "expression": "`enough_games`"
+                    }
+                  ]
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "table",
+              "encodings": {
+                "columns": [
+                  {
+                    "fieldName": "competition_name",
+                    "displayName": "Competition"
+                  },
+                  {
+                    "fieldName": "season",
+                    "displayName": "Season"
+                  },
+                  {
+                    "fieldName": "team_name",
+                    "displayName": "Team"
+                  },
+                  {
+                    "fieldName": "home_played",
+                    "displayName": "Home games"
+                  },
+                  {
+                    "fieldName": "home_ppg",
+                    "displayName": "Points per game at home",
+                    "format": {
+                      "type": "number",
+                      "decimalPlaces": {
+                        "type": "exact",
+                        "places": 2
+                      }
+                    }
+                  },
+                  {
+                    "fieldName": "away_played",
+                    "displayName": "Away games"
+                  },
+                  {
+                    "fieldName": "away_ppg",
+                    "displayName": "Points per game away",
+                    "format": {
+                      "type": "number",
+                      "decimalPlaces": {
+                        "type": "exact",
+                        "places": 2
+                      }
+                    }
+                  },
+                  {
+                    "fieldName": "ppg_gap",
+                    "displayName": "Home minus away",
+                    "format": {
+                      "type": "number",
+                      "decimalPlaces": {
+                        "type": "exact",
+                        "places": 2
+                      }
+                    }
+                  }
+                ]
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Points per game at home and away, by team",
+                "showDescription": true,
+                "description": "Teams with at least 10 home and 10 away games, biggest home advantage first."
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 14,
+            "width": 12,
+            "height": 8
+          }
+        },
+        {
+          "widget": {
+            "name": "footnote",
+            "multilineTextboxSpec": {
+              "lines": [
+                "**How it's counted.** League matches of the regular season, and cup matches except finals, which are played at a neutral venue. A match decided on penalties counts as the draw it was. 3 points for a win, 1 for a draw.\n",
+                "\n",
+                "**How precise it is.** After 100 matches, a league's share of points is known to about ±8 percentage points; after a full 380-match season, to about ±4 (95%). A season in progress can sit well away from the long-run value. A team's gap between home and away carries about ±0.45 points per game over 17 games each.\n",
+                "\n",
+                "Football data provided by the Football-Data.org API."
+              ]
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 22,
+            "width": 12,
+            "height": 3
+          }
+        }
+      ]
+    }
+  ],
+  "uiSettings": {
+    "theme": {
+      "canvasBackgroundColor": {
+        "light": "#F3F3F1",
+        "dark": "#111110"
+      },
+      "widgetBackgroundColor": {
+        "light": "#FCFCFB",
+        "dark": "#1A1A19"
+      },
+      "widgetBorderColor": {
+        "light": "#FCFCFB",
+        "dark": "#1A1A19"
+      },
+      "fontColor": {
+        "light": "#0B0B0B",
+        "dark": "#F0EFEC"
+      },
+      "selectionColor": {
+        "light": "#2272B4",
+        "dark": "#8ACAFF"
+      },
+      "visualizationColors": [
+        "#3987E5",
+        "#D95926",
+        "#199E70",
+        "#C98500",
+        "#D55181",
+        "#008300",
+        "#9085E9",
+        "#E66767"
+      ],
+      "widgetHeaderAlignment": "LEFT"
+    }
+  }
+}
