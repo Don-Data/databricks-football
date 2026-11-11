@@ -1,0 +1,47 @@
+# Tests and lint on every push to main and every pull request (they need no secrets).
+# After a merge to main, and only then, deploy prod as the service principal.
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch: # redeploy main by hand, e.g. after rotating the secret
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      # Actions pinned to a commit, not a tag: a tag can be moved, a commit can't.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+      - run: uv run --locked pytest
+      - run: uvx ruff check src tests setup
+
+  deploy:
+    needs: test
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    # The prod environment's secrets are only released to main (deployment branch policy).
+    environment: prod
+    concurrency:
+      group: deploy-prod
+      cancel-in-progress: false # never stop a deploy halfway
+    env:
+      DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
+      DATABRICKS_CLIENT_ID: ${{ secrets.DATABRICKS_CLIENT_ID }}
+      DATABRICKS_CLIENT_SECRET: ${{ secrets.DATABRICKS_CLIENT_SECRET }}
+      DATABRICKS_AUTH_TYPE: oauth-m2m
+      BUNDLE_VAR_operator: ${{ secrets.OPERATOR_EMAIL }} # failure emails and CAN_MANAGE go to a person
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: databricks/setup-cli@9230f12203ef173d0b901846f62a55ce997efef7 # v1.19.0
+        with:
+          version: 1.19.0
+      # databricks.yml names the CLI profile `free-edition`, and a runner has none. Create it with
+      # the host only: the credentials stay in the environment variables above, never on disk.
+      - run: printf '[free-edition]\nhost = %s\n' "$DATABRICKS_HOST" > ~/.databrickscfg
+      - run: databricks bundle deploy -t prod
