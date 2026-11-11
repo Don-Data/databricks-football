@@ -36,7 +36,6 @@ scripts:
       # Scripts can't reference resources, so these are the prod names (unprefixed in production mode).
       SCHEMAS: landing,bronze,silver,gold
       SECRET_SCOPE: football # the scope src/football/ingest.py reads the API token from
-      WAREHOUSE_ID: ${var.warehouse_id}
       JOB_NAME: football-ingest
 
 targets:
