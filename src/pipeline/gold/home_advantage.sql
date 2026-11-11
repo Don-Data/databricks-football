@@ -8,10 +8,10 @@
 -- Only FINISHED matches: an AWARDED result wasn't played out (Nantes - Toulouse 2025/26 was
 -- abandoned after 22 minutes), so it says nothing about playing at home.
 --
--- The match score, not the tie: after a penalty shootout, football-data.org's full-time score
--- includes the penalties, and `winner` names who won the tie. A two-legged tie can go to
--- penalties after a 0-1 home defeat, so the penalties are subtracted and the result is
--- derived from the goals.
+-- The game's score, not the tie's: when a tie goes to penalties, football-data.org's full-time
+-- score includes the penalties, and its `winner` is unreliable (see gold/matches.sql). A
+-- two-legged tie can go to penalties after a 0-1 home defeat, so the penalties are subtracted
+-- and the result is derived from the goals.
 --
 -- Counts only, no ratios, so everything adds up across teams, seasons and competitions. The
 -- home team's share of the points, for example, is
