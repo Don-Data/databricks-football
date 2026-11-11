@@ -17,7 +17,12 @@
 -- goals scored only (some leagues use head-to-head first), and point deductions aren't in the
 -- match data. Tied teams share a position.
 
-CREATE OR REFRESH MATERIALIZED VIEW ${gold_schema}.standings
+-- The check: every game counts as exactly one of won, drawn or lost. A finished match without a
+-- score would count as played but as none of the three. (Points need no check: they're defined
+-- as 3 * won + drawn below.)
+CREATE OR REFRESH MATERIALIZED VIEW ${gold_schema}.standings (
+  CONSTRAINT every_game_has_a_result EXPECT (played = won + drawn + lost) ON VIOLATION FAIL UPDATE
+)
 COMMENT 'League table per competition and season: one row per team, from finished regular-season matches.'
 AS
 WITH league_matches AS (
