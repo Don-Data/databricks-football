@@ -11,8 +11,10 @@ The bundle resolves these environment variables from the prod target:
     SCHEMAS             ALL PRIVILEGES on each (comma-separated): write the landing volume,
                         build the pipeline's tables. Dev schemas stay closed.
     SECRET_SCOPE        READ: the job reads the API token
-    WAREHOUSE_ID        CAN_USE: the bundle looks the warehouse up by name
     JOB_NAME            ownership (IS_OWNER) of the existing prod job
+
+No warehouse grant: the bundle looks the Serverless Starter Warehouse up by name on every
+deploy, and the `users` group, which includes the service principal, already has CAN_USE.
 
 Why ownership and not just CAN_MANAGE: a deploy makes the deployer the owner, and only an
 admin or the current owner may change the owner. So the service principal can only deploy
@@ -34,10 +36,6 @@ import os
 from databricks.sdk import WorkspaceClient
 from databricks.sdk.service.catalog import PermissionsChange, Privilege
 from databricks.sdk.service.jobs import JobAccessControlRequest, JobPermissionLevel
-from databricks.sdk.service.sql import (
-    WarehouseAccessControlRequest,
-    WarehousePermissionLevel,
-)
 from databricks.sdk.service.workspace import AclPermission
 
 READ = [Privilege.USE_SCHEMA, Privilege.SELECT, Privilege.READ_VOLUME]
@@ -71,14 +69,6 @@ def main() -> None:
     scope = os.environ["SECRET_SCOPE"]
     w.secrets.put_acl(scope, sp, AclPermission.READ)
     print(f"secret scope {scope}: READ")
-
-    w.warehouses.update_permissions(
-        os.environ["WAREHOUSE_ID"],
-        access_control_list=[
-            WarehouseAccessControlRequest(service_principal_name=sp, permission_level=WarehousePermissionLevel.CAN_USE)
-        ],
-    )
-    print("warehouse: CAN USE")
 
     # The admin running this keeps CAN_MANAGE until the deploy sets the bundle's permissions.
     job_name = os.environ["JOB_NAME"]
