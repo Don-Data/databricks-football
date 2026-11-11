@@ -26,7 +26,7 @@ A football data pipeline built entirely in Databricks, on the free Databricks Fr
 | `src/football/ingest.py` | The extract logic: API calls via dlt's retrying `requests`, which days to fetch (derived from the landing), 10-day date windows, the competition drift check, landing |
 | `src/football/tracked_competitions.yml` | What gets ingested: `history_start` and which competitions are tracked or deliberately ignored |
 | `tests/test_ingest.py` | Unit tests for the fetch-range rules, date windows, the drift check and landing (no API, no Databricks) |
-| `.github/workflows/tests.yml` | CI: the tests and a lint on every push and pull request, without secrets |
+| `.github/workflows/ci.yml` | CI/CD: the tests and a lint on every push and pull request, without secrets; after a merge to `main`, the prod deploy |
 
 **Two targets in the same workspace.** `dev` is for building: names get a `[dev <user>]` or `dev_<user>_` prefix, and the schedule is paused. `prod` is the real daily run, with unprefixed schemas `landing`, `bronze`, `silver` and `gold`. Each target has its own landing volume, so the first run of each is a full load. `prod` deploys only from `main`: changes go in through a pull request, and the prod target names `main` as its branch, so `bundle deploy -t prod` from any other branch stops with "not on the right Git branch". Prod is deployed by the service principal `github-actions-football`, and the job and pipeline run as it.
 
@@ -54,7 +54,7 @@ databricks bundle run ingest -t dev                                    # fetches
 databricks bundle run ingest -t dev --params date_from=2026-08-01,date_to=2026-08-31   # re-fetch a period on purpose
 ```
 
-Don't deploy prod from a laptop. The bundle makes the deployer the owner of the job and the pipeline, and the service principal can only deploy what it owns.
+Prod is deployed by GitHub Actions after a merge to `main` (see [CI/CD](#cicd)). Don't deploy it from a laptop. The bundle makes the deployer the owner of the job and the pipeline, and the service principal can only deploy what it owns.
 
 **Which days a run fetches.** There's no separate watermark. Every matches file name carries the window it requested, for example `20261110T143558_2026-11-07_2026-11-17_df315d6c.json`, so a run sees from the file names alone which days are settled. A day is settled once a request covered it after it had ended. A run fetches from the first unsettled day since `history_start`, always at least 3 days back for late corrections, up to 6 days ahead. So the first run is the full load, a normal day is a single request, a run after an outage catches up by itself, and a deleted file is simply fetched again.
 
@@ -64,7 +64,36 @@ Don't deploy prod from a laptop. The bundle makes the deployer the owner of the 
 uv run pytest
 ```
 
-GitHub Actions runs the same tests and a lint on every push and pull request (`.github/workflows/tests.yml`). `bundle deploy` doesn't run them, so run them before deploying.
+GitHub Actions runs the same tests and a lint on every push and pull request (`.github/workflows/ci.yml`). `bundle deploy` doesn't run them, so run them before deploying dev.
+
+## CI/CD
+
+After a merge to `main`, the `deploy` job in `.github/workflows/ci.yml` runs `databricks bundle deploy -t prod`, once the tests have passed. It logs in as the service principal `github-actions-football` with an OAuth secret (OAuth M2M). Free Edition has no account console, so workload identity federation (OIDC, no stored secret) isn't available there.
+
+The secrets live in the GitHub environment `prod`, and only `main` may use it. Pull requests, and forks above all, never see them.
+
+**One-time setup** (as a workspace admin; this is how this repo moved its existing prod deployment):
+
+1. Create the service principal:
+   ```
+   databricks service-principals create --display-name github-actions-football
+   ```
+2. In GitHub, create the environment `prod`, with `main` as its only deployment branch. Then add these secrets to it:
+   - `DATABRICKS_HOST`: the workspace URL
+   - `DATABRICKS_CLIENT_ID`: the service principal's application ID
+   - `DATABRICKS_CLIENT_SECRET`: from `databricks service-principal-secrets-proxy create <service-principal-id> --lifetime 31536000s` (one year)
+   - `OPERATOR_EMAIL`: who gets failure emails and CAN_MANAGE in prod
+3. Move an existing prod deployment into the service principal's state with `databricks bundle deployment bind <key> <id> -t prod`, once each for the job, the pipeline, the schemas and the volume.
+   - Without this, the first deploy from CI starts with an empty state and creates everything a second time.
+   - Check it with `databricks bundle plan -t prod`: it should show only updates.
+   - Delete `.databricks/bundle/prod` locally first, or the plan reads your local cache and shows updates even when the remote state is empty.
+4. Grant the access, then deploy straight away by merging, or with *Run workflow*:
+   ```
+   databricks bundle run grant_prod_access -t prod
+   ```
+   From the ownership transfer on, the job runs as the service principal. Until the deploy, it still points to files it can't read.
+
+**Keep in mind:** Databricks deletes an OAuth secret after 90 days without use. If nothing has been merged for that long, create a new secret, replace `DATABRICKS_CLIENT_SECRET`, and redeploy with *Run workflow* (`workflow_dispatch`).
 
 ## License and data
 
