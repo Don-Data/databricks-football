@@ -38,7 +38,6 @@ scripts:
       SECRET_SCOPE: football # the scope src/football/ingest.py reads the API token from
       WAREHOUSE_ID: ${var.warehouse_id}
       JOB_NAME: football-ingest
-      PIPELINE_NAME: football-pipeline
 
 targets:
   # For building: names get a [dev <user>] / dev_<user>_ prefix, and schedules are paused.
