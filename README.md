@@ -72,7 +72,7 @@ After a merge to `main`, the `deploy` job in `.github/workflows/ci.yml` runs `da
 
 The secrets live in the GitHub environment `prod`, and only `main` may use it. Pull requests, and forks above all, never see them.
 
-**One-time setup** (as a workspace admin; this is how this repo moved its existing prod deployment):
+**One-time setup** (as a workspace admin). This is how this repo moved its existing prod deployment, which a person had deployed by hand. Starting without one isn't tested here.
 
 1. Create the service principal:
    ```
@@ -82,16 +82,21 @@ The secrets live in the GitHub environment `prod`, and only `main` may use it. P
    - `DATABRICKS_HOST`: the workspace URL
    - `DATABRICKS_CLIENT_ID`: the service principal's application ID
    - `DATABRICKS_CLIENT_SECRET`: from `databricks service-principal-secrets-proxy create <service-principal-id> --lifetime 31536000s` (one year)
-   - `OPERATOR_EMAIL`: who gets failure emails and CAN_MANAGE in prod
-3. Move an existing prod deployment into the service principal's state with `databricks bundle deployment bind <key> <id> -t prod`, once each for the job, the pipeline, the schemas and the volume.
+   - `OPERATOR_EMAIL`: who gets failure emails and CAN_MANAGE in prod.
+     - It must be exactly a Databricks login, as `databricks current-user me` shows it under `userName`.
+     - Any other address fails the deploy with "Principal: UserName(\*\*\*) does not exist".
+3. Move the job, the schemas and the volume into the service principal's state with `databricks bundle deployment bind <key> <id> -t prod`.
    - Without this, the first deploy from CI starts with an empty state and creates everything a second time.
-   - Check it with `databricks bundle plan -t prod`: it should show only updates.
-   - Delete `.databricks/bundle/prod` locally first, or the plan reads your local cache and shows updates even when the remote state is empty.
-4. Grant the access, then deploy straight away by merging, or with *Run workflow*:
-   ```
-   databricks bundle run grant_prod_access -t prod
-   ```
-   From the ownership transfer on, the job runs as the service principal. Until the deploy, it still points to files it can't read.
+   - Check it with `databricks bundle plan -t prod`. Delete `.databricks/bundle/prod` locally first, or the plan reads your local cache and shows updates even when the remote state is empty.
+4. Run `databricks bundle run grant_prod_access -t prod`. It grants the service principal its access, gives you read access to the prod schemas, and transfers the job to the service principal.
+5. Replace the pipeline, because it can't be handed over. "Only metastore admins can change pipeline owner", and on Free Edition the metastore belongs to Databricks. So the service principal creates the pipeline anew:
+   - Delete the old pipeline with `databricks pipelines delete <pipeline-id>`.
+   - Drop its tables. They're kept after the delete, but "cannot be updated until moved into an active pipeline". Moving them needs one identity that owns both pipelines.
+     - List them all before dropping, so none is forgotten: `SELECT table_schema, table_name, table_type FROM football.information_schema.tables WHERE table_schema IN ('bronze', 'silver', 'gold') AND table_name NOT LIKE '\_\_%' AND table_name NOT LIKE 'event\_log%'`.
+     - A forgotten one fails the new pipeline with "is already managed by pipeline …".
+     - The filter hides the pipeline's internal tables (`__materialization_…`, `event_log_…`). Leave those alone.
+6. Deploy straight away, by merging or with *Run workflow*, then start the job once. Bronze rebuilds itself from the landing volume, and silver and gold follow.
+   - From step 4 until this deploy, prod is down: the job runs as the service principal but still points to the old files. Do steps 4 to 6 in one go.
 
 **Keep in mind:** Databricks deletes an OAuth secret after 90 days without use. If nothing has been merged for that long, create a new secret, replace `DATABRICKS_CLIENT_SECRET`, and redeploy with *Run workflow* (`workflow_dispatch`).
 
