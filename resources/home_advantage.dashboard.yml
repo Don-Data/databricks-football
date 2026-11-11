@@ -1,0 +1,12 @@
+resources:
+  dashboards:
+    home_advantage:
+      display_name: Home advantage
+      file_path: ../src/dashboards/home_advantage.lvdash.json
+      warehouse_id: ${var.warehouse_id}
+      # The dashboard's queries name tables without catalog and schema, so the same file
+      # reads football.gold in prod and the prefixed dev schema in dev.
+      dataset_catalog: ${var.catalog}
+      dataset_schema: ${resources.schemas.gold.name}
+      # Viewers query with their own permissions, so the dashboard shows only what they may read.
+      embed_credentials: false
