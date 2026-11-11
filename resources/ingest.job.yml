@@ -70,8 +70,26 @@ resources:
               - --date-to
               - "{{job.parameters.date_to}}"
 
-        - task_key: run_pipeline
+        # The tables football-data.org publishes, current season, for the pipeline's comparison with
+        # our own (gold.standings_check). After the matches, so both come from the same run.
+        - task_key: extract_standings
           depends_on:
             - task_key: extract_matches
+          environment_key: ingest
+          max_retries: 1
+          min_retry_interval_millis: 120000
+          timeout_seconds: 900
+          spark_python_task:
+            python_file: ../src/football/ingest.py
+            parameters:
+              - standings
+              - --landing-root
+              - /Volumes/${var.catalog}/${resources.schemas.landing.name}/${resources.volumes.api_responses.name}
+              - --tracked
+              - ${workspace.file_path}/src/football/tracked_competitions.yml
+
+        - task_key: run_pipeline
+          depends_on:
+            - task_key: extract_standings
           pipeline_task: # runs in the job's performance mode (STANDARD)
             pipeline_id: ${resources.pipelines.football.id}
