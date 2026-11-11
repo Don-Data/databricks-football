@@ -33,8 +33,8 @@ targets:
   # Same Free Edition workspace, because Free Edition has only one.
   prod:
     mode: production
-    # Prod is what's on main. Production mode checks the current branch at `bundle deploy`
-    # (not at `validate`); `--force` overrides it.
+    # Prod is what's on main: from any other branch, `bundle deploy -t prod` stops with
+    # "not on the right Git branch". `--force` overrides it; `validate` doesn't check it.
     git:
       branch: main
     workspace:
