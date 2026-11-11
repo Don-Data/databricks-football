@@ -33,10 +33,7 @@ scripts:
     env:
       SP_APPLICATION_ID: ${var.prod_service_principal}
       CATALOG: ${var.catalog}
-      # Scripts can't reference resources, so these are the prod names (unprefixed in production mode).
-      SCHEMAS: landing,bronze,silver,gold
       SECRET_SCOPE: football # the scope src/football/ingest.py reads the API token from
-      JOB_NAME: football-ingest
 
 targets:
   # For building: names get a [dev <user>] / dev_<user>_ prefix, and schedules are paused.
@@ -72,3 +69,23 @@ targets:
         level: CAN_MANAGE
       - user_name: ${var.operator}
         level: CAN_MANAGE
+    # The service principal creates and owns the prod schemas and everything in them, so the
+    # operator needs grants to read prod. Owning the catalog isn't enough for that.
+    resources:
+      schemas:
+        landing:
+          grants:
+            - principal: ${var.operator}
+              privileges: [USE_SCHEMA, SELECT, READ_VOLUME]
+        bronze:
+          grants:
+            - principal: ${var.operator}
+              privileges: [USE_SCHEMA, SELECT, READ_VOLUME]
+        silver:
+          grants:
+            - principal: ${var.operator}
+              privileges: [USE_SCHEMA, SELECT, READ_VOLUME]
+        gold:
+          grants:
+            - principal: ${var.operator}
+              privileges: [USE_SCHEMA, SELECT, READ_VOLUME]
