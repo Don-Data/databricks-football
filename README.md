@@ -11,9 +11,9 @@ A football data pipeline built entirely in Databricks, on the free Databricks Fr
 | `databricks.yml` | The bundle: variables, the `setup` script, and the `dev` and `prod` targets |
 | `setup/catalog.sql` | The catalog. It's the one object a bundle resource can't create on Free Edition |
 | `setup/run_sql.py` | Runs a SQL file on the SQL warehouse; called by `databricks bundle run setup` |
-| `setup/grant_prod_access.py` | The one-time access grants and the ownership transfer for the prod service principal; called by `databricks bundle run grant_prod_access -t prod` |
+| `setup/grant_prod_access.py` | The one-time grants the prod service principal needs before its first deploy (catalog, secret scope); called by `databricks bundle run grant_prod_access -t prod` |
 | `resources/landing.schema.yml` | The `landing` schema (bronze, silver and gold get their own later) |
-| `resources/api_responses.volume.yml` | The landing volume: raw API responses, one JSON envelope per request, protected against `bundle destroy` |
+| `resources/api_responses.volume.yml` | The landing volume: raw API responses, one JSON envelope per request. Not protected: `bundle destroy` deletes it with every landed file |
 | `resources/ingest.job.yml` | The Lakeflow Job: `extract_competitions` → `extract_matches` → `run_pipeline` on serverless, daily at 06:00 Europe/Berlin, with an email on failure |
 | `resources/bronze.schema.yml` | The `bronze` schema |
 | `resources/football.pipeline.yml` | The Spark Declarative Pipeline (serverless, triggered by the job) |
@@ -72,31 +72,32 @@ After a merge to `main`, the `deploy` job in `.github/workflows/ci.yml` runs `da
 
 The secrets live in the GitHub environment `prod`, and only `main` may use it. Pull requests, and forks above all, never see them.
 
-**One-time setup** (as a workspace admin). This is how this repo moved its existing prod deployment, which a person had deployed by hand. Starting without one isn't tested here.
+**One-time setup** (as a workspace admin, after [Setup](#setup)). Prod is never deployed by a person. The service principal creates every prod object on its first deploy, so it owns all of them.
 
 1. Create the service principal:
    ```
    databricks service-principals create --display-name github-actions-football
    ```
-2. In GitHub, create the environment `prod`, with `main` as its only deployment branch. Then add these secrets to it:
+2. Give it what exists before its first deploy: `USE CATALOG` and `CREATE SCHEMA` on the catalog, and `READ` on the `football` secret scope:
+   ```
+   databricks bundle run grant_prod_access -t prod
+   ```
+3. In GitHub, create the environment `prod`, with `main` as its only deployment branch. Then add these secrets to it:
    - `DATABRICKS_HOST`: the workspace URL
    - `DATABRICKS_CLIENT_ID`: the service principal's application ID
    - `DATABRICKS_CLIENT_SECRET`: from `databricks service-principal-secrets-proxy create <service-principal-id> --lifetime 31536000s` (one year)
-   - `OPERATOR_EMAIL`: who gets failure emails and CAN_MANAGE in prod.
+   - `OPERATOR_EMAIL`: who gets failure emails, CAN_MANAGE and read access in prod.
      - It must be exactly a Databricks login, as `databricks current-user me` shows it under `userName`.
      - Any other address fails the deploy with "Principal: UserName(\*\*\*) does not exist".
-3. Move the job, the schemas and the volume into the service principal's state with `databricks bundle deployment bind <key> <id> -t prod`.
-   - Without this, the first deploy from CI starts with an empty state and creates everything a second time.
-   - Check it with `databricks bundle plan -t prod`. Delete `.databricks/bundle/prod` locally first, or the plan reads your local cache and shows updates even when the remote state is empty.
-4. Run `databricks bundle run grant_prod_access -t prod`. It grants the service principal its access, gives you read access to the prod schemas, and transfers the job to the service principal.
-5. Replace the pipeline, because it can't be handed over. "Only metastore admins can change pipeline owner", and on Free Edition the metastore belongs to Databricks. So the service principal creates the pipeline anew:
-   - Delete the old pipeline with `databricks pipelines delete <pipeline-id>`.
-   - Drop its tables. They're kept after the delete, but "cannot be updated until moved into an active pipeline". Moving them needs one identity that owns both pipelines.
-     - List them all before dropping, so none is forgotten: `SELECT table_schema, table_name, table_type FROM football.information_schema.tables WHERE table_schema IN ('bronze', 'silver', 'gold') AND table_name NOT LIKE '\_\_%' AND table_name NOT LIKE 'event\_log%'`.
-     - A forgotten one fails the new pipeline with "is already managed by pipeline …".
-     - The filter hides the pipeline's internal tables (`__materialization_…`, `event_log_…`). Leave those alone.
-6. Deploy straight away, by merging or with *Run workflow*, then start the job once. Bronze rebuilds itself from the landing volume, and silver and gold follow.
-   - From step 4 until this deploy, prod is down: the job runs as the service principal but still points to the old files. Do steps 4 to 6 in one go.
+4. Deploy with *Run workflow* (`workflow_dispatch`) on `main`, then start the job once. That first run is the full load.
+
+**Taking over a prod that a person deployed by hand is harder.** The job can be handed over, but "Only metastore admins can change pipeline owner", and on Free Edition the metastore belongs to Databricks. This repo did that once: [PR #5](https://github.com/Don-Data/databricks-football/pull/5) and the README at that commit describe the steps.
+
+## Starting over
+
+`databricks bundle destroy -t dev` deletes the dev job, the pipeline, the schemas with all their tables, and the landing volume with every landed file. The catalog, the secret scope and the service principal stay, because they aren't bundle resources. `databricks bundle deploy -t dev` and `databricks bundle run ingest -t dev` then build everything again, starting with a full load.
+
+Prod works the same way: run `databricks bundle destroy -t prod` from `main`, as an admin, then step 4 above.
 
 **Keep in mind:** Databricks deletes an OAuth secret after 90 days without use. If nothing has been merged for that long, create a new secret, replace `DATABRICKS_CLIENT_SECRET`, and redeploy with *Run workflow* (`workflow_dispatch`).
 
