@@ -1,7 +1,9 @@
 -- Gold: the league table of every competition and season, computed from finished matches.
 --
 -- Only leagues, and only their regular season: play-offs and relegation play-offs don't count
--- towards the table, and cups have no single table. AWARDED matches count with their awarded score.
+-- towards the table, and cups have no single table. AWARDED matches count with their awarded score,
+-- as in the official table: Nantes - Toulouse 2025/26 was abandoned at 0-0, and the LFP confirmed
+-- the 0-0. football-data.org's own table leaves that match out (see src/football/check_standings.py).
 --
 -- Grouped by season from the start: the data holds several seasons per competition (2025/26 and
 -- 2026/27 in Europe, calendar years in Brazil), and a table across seasons would be wrong.

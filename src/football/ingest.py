@@ -50,13 +50,13 @@ MATCHES_FILE_NAME = re.compile(r"^(\d{8})T\d{6}_(\d{4}-\d{2}-\d{2})_(\d{4}-\d{2}
 # --- API access -------------------------------------------------------------
 
 
-def _api_token() -> str:
+def api_token() -> str:
     from databricks.sdk.runtime import dbutils  # only exists on Databricks compute
 
     return dbutils.secrets.get(SECRET_SCOPE, SECRET_KEY)
 
 
-def _get(path: str, params: Params, token: str) -> requests.Response:
+def api_get(path: str, params: Params, token: str) -> requests.Response:
     response = requests.get(f"{BASE_URL}{path}", headers={"X-Auth-Token": token}, params=params, timeout=30)
     response.raise_for_status()  # 4xx other than 429 is our mistake: fail instead of retrying
     _respect_rate_limit(response)
@@ -201,7 +201,7 @@ def date_windows(start: date, end: date, max_days: int = MAX_WINDOW_DAYS) -> Ite
 
 
 def extract_competitions(landing_root: str, tracked: Tracked, token: str) -> str:
-    payload: Json = _get("/competitions", {}, token).json()
+    payload: Json = api_get("/competitions", {}, token).json()
     landed = land(landing_root, "competitions", "/competitions", {}, payload)
     # Land first, check second: if the check fails, the payload is there to inspect.
     check_for_new_competitions(payload, tracked.competition_ids, tracked.ignored_competition_ids)
@@ -213,7 +213,7 @@ def extract_matches(landing_root: str, tracked: Tracked, token: str, date_from: 
     landed: list[str] = []
     for window_from, api_date_to in date_windows(date_from, date_to):
         params: Params = {"dateFrom": window_from.isoformat(), "dateTo": api_date_to.isoformat(), "competitions": competitions}
-        payload: Json = _get("/matches", params, token).json()
+        payload: Json = api_get("/matches", params, token).json()
         suffix = f"{params['dateFrom']}_{params['dateTo']}"
         landed.append(land(landing_root, "matches", "/matches", params, payload, name_suffix=suffix))
     print(f"Landed {len(landed)} file(s) for {date_from} .. {date_to}")
@@ -235,7 +235,7 @@ def main(argv: list[str] | None = None) -> None:
     args = parser.parse_args(argv)
 
     tracked = load_tracked(args.tracked)
-    token = _api_token()
+    token = api_token()
     if args.resource == "competitions":
         extract_competitions(args.landing_root, tracked, token)
         return

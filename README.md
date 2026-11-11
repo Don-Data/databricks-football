@@ -26,6 +26,9 @@ A football data pipeline built entirely in Databricks, on the free Databricks Fr
 | `src/football/ingest.py` | The extract logic: API calls via dlt's retrying `requests`, which days to fetch (derived from the landing), 10-day date windows, the competition drift check, landing |
 | `src/football/tracked_competitions.yml` | What gets ingested: `history_start` and which competitions are tracked or deliberately ignored |
 | `tests/test_ingest.py` | Unit tests for the fetch-range rules, date windows, the drift check and landing (no API, no Databricks) |
+| `resources/check_standings.job.yml`, `src/football/check_standings.py` | The standings check: compares `gold.standings` with the tables football-data.org publishes. No schedule: run by hand |
+| `tests/test_check_standings.py` | Unit tests for reading the published table and classifying the differences |
+| `.gitattributes` | LF line endings everywhere, whatever a contributor's Git settings are |
 | `.github/workflows/ci.yml` | CI/CD: the tests and a lint on every push and pull request, without secrets; after a merge to `main`, the prod deploy |
 
 **Two targets in the same workspace.** `dev` is for building: names get a `[dev <user>]` or `dev_<user>_` prefix, and the schedule is paused. `prod` is the real daily run, with unprefixed schemas `landing`, `bronze`, `silver` and `gold`. Each target has its own landing volume, so the first run of each is a full load. `prod` deploys only from `main`: changes go in through a pull request, and the prod target names `main` as its branch, so `bundle deploy -t prod` from any other branch stops with "not on the right Git branch". Prod is deployed by the service principal `github-actions-football`, and the job and pipeline run as it.
@@ -64,6 +67,18 @@ uv run pytest
 ```
 
 GitHub Actions runs the same tests and a lint on every push and pull request (`.github/workflows/ci.yml`). `bundle deploy` doesn't run them, so run them before deploying dev.
+
+## Checking gold against the API
+
+`gold.standings` computes every table itself, from the matches. The standings check compares it team by team with the table football-data.org publishes, for every competition and season in gold:
+
+```
+databricks bundle run check_standings -t dev
+```
+
+Run it right after an ingest run, because a match that finished since then shows up as a difference. The check lands every response in `standings/`. It fails when the match data differs: games, wins, draws, losses or goals. Other points with the same games, or another position with the same points, come from the simplifications documented in `standings.sql`, so they're only reported.
+
+First run, on 2026-11-11: 17 tables, 16 identical down to every position. In Ligue 1 2025/26, football-data.org's own table leaves out Nantes vs Toulouse. That match was abandoned at 0-0, and the LFP confirmed the 0-0, so gold is right. The check lists it as a known API error.
 
 ## CI/CD
 

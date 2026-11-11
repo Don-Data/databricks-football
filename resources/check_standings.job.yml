@@ -1,0 +1,31 @@
+resources:
+  jobs:
+    check_standings:
+      name: football-check-standings
+      description: Compares gold.standings with the league tables football-data.org publishes. Run it right after an ingest run.
+      max_concurrent_runs: 1
+      performance_target: STANDARD # a check you start by hand, no deadline
+      tags:
+        project: databricks-football
+
+      # No schedule: for now it's a check you run by hand (see README).
+
+      environments:
+        - environment_key: check
+          spec:
+            environment_version: "6"
+            dependencies: # the same as the ingest job: the check calls the API through ingest.py
+              - dlt==1.32.0
+              - pyyaml==6.0.3
+
+      tasks:
+        - task_key: check_standings
+          environment_key: check
+          timeout_seconds: 900
+          spark_python_task:
+            python_file: ../src/football/check_standings.py
+            parameters:
+              - --landing-root
+              - /Volumes/${var.catalog}/${resources.schemas.landing.name}/${resources.volumes.api_responses.name}
+              - --standings-table
+              - ${var.catalog}.${resources.schemas.gold.name}.standings
