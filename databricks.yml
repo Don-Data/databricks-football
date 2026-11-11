@@ -69,9 +69,16 @@ targets:
         level: CAN_MANAGE
       - user_name: ${var.operator}
         level: CAN_MANAGE
-    # The service principal creates and owns the prod schemas and everything in them, so the
-    # operator needs grants to read prod. Owning the catalog isn't enough for that.
     resources:
+      # The landed files are the one thing in prod that can't be rebuilt: a new fetch only gets
+      # what the API says today. So the bundle refuses to delete or recreate this volume, in
+      # `bundle destroy` and in a deploy. Dev stays free to destroy. Starting over: see README.
+      volumes:
+        api_responses:
+          lifecycle:
+            prevent_destroy: true
+      # The service principal creates and owns the prod schemas and everything in them, so the
+      # operator needs grants to read prod. Owning the catalog isn't enough for that.
       schemas:
         landing:
           grants:

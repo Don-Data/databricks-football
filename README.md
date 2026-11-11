@@ -13,7 +13,7 @@ A football data pipeline built entirely in Databricks, on the free Databricks Fr
 | `setup/run_sql.py` | Runs a SQL file on the SQL warehouse; called by `databricks bundle run setup` |
 | `setup/grant_prod_access.py` | The one-time grants the prod service principal needs before its first deploy (catalog, secret scope); called by `databricks bundle run grant_prod_access -t prod` |
 | `resources/landing.schema.yml` | The `landing` schema (bronze, silver and gold get their own later) |
-| `resources/api_responses.volume.yml` | The landing volume: raw API responses, one JSON envelope per request. Not protected: `bundle destroy` deletes it with every landed file |
+| `resources/api_responses.volume.yml` | The landing volume: raw API responses, one JSON envelope per request. Protected in prod (see [Starting over](#starting-over)); in dev, `bundle destroy` deletes it with every landed file |
 | `resources/ingest.job.yml` | The Lakeflow Job: `extract_competitions` → `extract_matches` → `run_pipeline` on serverless, daily at 06:00 Europe/Berlin, with an email on failure |
 | `resources/bronze.schema.yml` | The `bronze` schema |
 | `resources/football.pipeline.yml` | The Spark Declarative Pipeline (serverless, triggered by the job) |
@@ -51,7 +51,6 @@ A football data pipeline built entirely in Databricks, on the free Databricks Fr
 databricks bundle validate --strict -t dev
 databricks bundle deploy -t dev
 databricks bundle run ingest -t dev                                    # fetches whatever isn't settled yet
-databricks bundle run ingest -t dev --params date_from=2026-08-01,date_to=2026-08-31   # re-fetch a period on purpose
 ```
 
 Prod is deployed by GitHub Actions after a merge to `main` (see [CI/CD](#cicd)). Don't deploy it from a laptop. The bundle makes the deployer the owner of the job and the pipeline, and the service principal can only deploy what it owns.
@@ -93,11 +92,30 @@ The secrets live in the GitHub environment `prod`, and only `main` may use it. P
 
 **Taking over a prod that a person deployed by hand is harder.** The job can be handed over, but "Only metastore admins can change pipeline owner", and on Free Edition the metastore belongs to Databricks. This repo did that once: [PR #5](https://github.com/Don-Data/databricks-football/pull/5) and the README at that commit describe the steps.
 
+## Reloads
+
+Neither reload deletes a landed file. Both work in prod too, with `-t prod`: the run happens as the service principal, and the operator may start it because the prod target gives them CAN_MANAGE.
+
+- **Rebuild the tables**, for example after a fix in `src/pipeline/`. A full refresh reads every landed file again, without an API call:
+  ```
+  databricks bundle run football -t dev --full-refresh-all
+  ```
+- **Fetch a period again**, for example when the API corrected results. The new files go next to the old ones, and silver takes the latest fetch:
+  ```
+  databricks bundle run ingest -t dev --params date_from=2026-08-01,date_to=2026-08-31
+  ```
+
 ## Starting over
 
 `databricks bundle destroy -t dev` deletes the dev job, the pipeline, the schemas with all their tables, and the landing volume with every landed file. The catalog, the secret scope and the service principal stay, because they aren't bundle resources. `databricks bundle deploy -t dev` and `databricks bundle run ingest -t dev` then build everything again, starting with a full load.
 
-Prod works the same way: run `databricks bundle destroy -t prod` from `main`, as an admin, then step 4 above.
+Prod's landing volume is protected. The landed files are the one thing in prod a new fetch can't bring back, because it only gets what the API says today. So the prod target sets `lifecycle.prevent_destroy` on the volume, and any `bundle destroy` or deploy that would delete or recreate it stops with "has lifecycle.prevent_destroy set". Renaming the volume is an in-place update and keeps the files. Moving it to another schema or catalog is a recreate.
+
+To start prod over on purpose, from `main`, as an admin:
+
+1. In `databricks.yml`, set `prevent_destroy` to `false` under the prod target. Don't commit it: the check reads the local configuration.
+2. `databricks bundle destroy -t prod`
+3. `git restore databricks.yml`, then step 4 of the one-time setup in [CI/CD](#cicd).
 
 **Keep in mind:** Databricks deletes an OAuth secret after 90 days without use. If nothing has been merged for that long, create a new secret, replace `DATABRICKS_CLIENT_SECRET`, and redeploy with *Run workflow* (`workflow_dispatch`).
 
