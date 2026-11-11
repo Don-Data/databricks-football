@@ -23,6 +23,7 @@ A football data pipeline built entirely in Databricks, on the free Databricks Fr
 | `resources/gold.schema.yml` | The `gold` schema: what consumers read |
 | `src/pipeline/gold/standings.sql` | The league table per competition and season (materialized view), only for seasons that are complete in the data |
 | `src/pipeline/gold/matches.sql`, `teams.sql` | Every match, and the team dimension (views: 1:1 projections of silver, no storage, always current) |
+| `src/pipeline/gold/checks.sql` | `gold_keys`: a private materialized view that fails the update when a key appears twice in gold |
 | `src/pipeline/gold/home_advantage.sql` | Every team's home and away record per competition and season (a view, counts only), from finished matches with a real home side |
 | `resources/home_advantage.dashboard.yml`, `src/dashboards/home_advantage.lvdash.json` | The AI/BI dashboard on it: how much more teams win at home, by competition and by team |
 | `src/football/ingest.py` | The extract logic: API calls via dlt's retrying `requests`, which days to fetch (derived from the landing), 10-day date windows, the competition drift check, landing |
@@ -69,6 +70,13 @@ uv run pytest
 ```
 
 GitHub Actions runs the same tests and a lint on every push and pull request (`.github/workflows/ci.yml`). `bundle deploy` doesn't run them, so run them before deploying dev.
+
+**Data tests run inside the pipeline**, as expectations with `ON VIOLATION FAIL UPDATE`. A violation stops the update, and with it the daily job, which sends the failure email:
+- bronze: every match and competition has an id, because silver keys on it;
+- `gold.standings`: every game counts as exactly one of won, drawn or lost;
+- `gold_keys` (`src/pipeline/gold/checks.sql`, private): one row per key in `gold.matches`, `gold.teams`, `gold.standings` and `gold.home_advantage`. Views can't carry expectations, so this materialized view counts the rows per key.
+
+Silver needs no uniqueness check, because AUTO CDC keeps one row per key by construction. Expectations check rows as they're written, not the whole table on every run: each bronze row is checked once, on its way in. A `FAIL UPDATE` expectation that passes reports no metrics in the pipeline's *Data quality* tab. The only sign is the update completing.
 
 ## Home advantage
 

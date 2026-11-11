@@ -6,7 +6,13 @@
 -- The same match appears many times: once per fetch (daily runs re-fetch recent days), and a
 -- kick-off at exactly 00:00 UTC lands in two neighbouring windows, because the API's dateTo
 -- includes midnight. Silver keeps the latest version per match id.
-CREATE OR REFRESH STREAMING TABLE matches
+--
+-- The one check here: every match has an id, because silver keys on it. Bronze only ever adds
+-- rows, so each row is checked once, on its way in. A violation fails the update, and with it
+-- the job, which sends the failure email.
+CREATE OR REFRESH STREAMING TABLE matches (
+  CONSTRAINT match_has_id EXPECT (match:id IS NOT NULL) ON VIOLATION FAIL UPDATE
+)
 COMMENT 'One row per match per landed API response. The match is unchanged, as VARIANT.'
 AS SELECT
   explode(cast(envelope:response.matches AS ARRAY<VARIANT>)) AS match,
