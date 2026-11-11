@@ -33,6 +33,10 @@ targets:
   # Same Free Edition workspace, because Free Edition has only one.
   prod:
     mode: production
+    # Prod is what's on main. Production mode checks the current branch at `bundle deploy`
+    # (not at `validate`); `--force` overrides it.
+    git:
+      branch: main
     workspace:
       profile: free-edition
       root_path: /Workspace/Users/${workspace.current_user.userName}/.bundle/${bundle.name}/${bundle.target}
