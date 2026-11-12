@@ -1,17 +1,24 @@
 -- Gold: every match, shaped for the people and tools that consume it (dashboards, Genie,
 -- ad hoc queries). Consumers read gold only, so silver can change without breaking them.
 --
--- A view, not a materialized copy: it's a 1:1 projection of silver.matches with names instead
--- of codes, so it needs no storage and no refresh, and it's always current. Materialize it only
--- if queries get slow. Technical columns (fetched_at, last_updated) stay in silver.
+-- A view, not a materialized copy: one row per match of silver.matches, with names instead of
+-- codes and the game's own score, so it needs no storage and no refresh, and it's always
+-- current. Materialize it only if queries get slow. Technical columns (fetched_at, last_updated)
+-- stay in silver.
 --
--- Goals and winner are the game's, not the tie's. When a tie goes to penalties,
--- football-data.org's full-time score includes the penalties, and its `winner` is unreliable:
--- usually the shootout's winner, sometimes DRAW. In a two-legged tie the shootout can follow a
--- game one side won: Tolima - Tachira (Libertadores 2026) comes as 3-1 with penalties 3-0, and
--- the game was 0-1. The API's `duration` doesn't flag every shootout either. So the penalties
--- are always subtracted, and the winner always follows the goals. The shootout stays in
--- penalties_home and penalties_away.
+-- Goals and winner are the game's, not the tie's. A two-legged tie has two winners: the winner
+-- of each game, and the team that goes through on aggregate. football-data.org mixes them:
+--   - Without a penalty shootout, its `winner` is the game's winner, even when that team goes
+--     out on aggregate. Juventus - Galatasaray (Champions League 2025/26) ended 3-2 in the
+--     second leg, and Galatasaray went through 7-5.
+--   - After a shootout, its full-time score includes the penalties, and its `winner` is usually
+--     the shootout's winner, once DRAW (LDU Quito - Palmeiras, Libertadores 2026). Tolima -
+--     Tachira (Libertadores 2026) comes as 3-1 with penalties 3-0: the game was 0-1, and Tolima
+--     went through on penalties after 1-1 on aggregate.
+--   - Its `duration` doesn't flag every shootout.
+-- So the penalties are always subtracted, and the winner always follows the goals: a home win,
+-- an away win or a draw in this game. The shootout stays in penalties_home and penalties_away.
+-- Who went through is in no field: derive it from both legs and the second leg's penalties.
 
 CREATE VIEW ${gold_schema}.matches
 COMMENT 'Every match with competition, season, teams and score. One row per match. Goals and winner are the game''s, without a penalty shootout.'
