@@ -144,7 +144,7 @@ The secrets live in the GitHub environment `prod`, and only `main` may use it. P
      - Any other address fails the deploy with "Principal: UserName(\*\*\*) does not exist".
 4. Deploy with *Run workflow* (`workflow_dispatch`) on `main`, then start the job once. That first run is the full load.
 
-**Taking over a prod that a person deployed by hand is harder.** The job can be handed over, but "Only metastore admins can change pipeline owner", and on Free Edition the metastore belongs to Databricks. This repo did that once: [PR #5](https://github.com/Don-Data/databricks-football/pull/5) and the README at that commit describe the steps.
+**Taking over a prod that a person deployed by hand is harder.** The job can be handed over, but "Only metastore admins can change pipeline owner", and on Free Edition the metastore belongs to Databricks. This repo did that once: [PR #5](https://github.com/Don-Data/databricks-football-trial/pull/5) and the README at that commit describe the steps.
 
 **Keep in mind:** Databricks deletes an OAuth secret after 90 days without use. If nothing has been merged for that long, create a new secret, replace `DATABRICKS_CLIENT_SECRET`, and redeploy with *Run workflow* (`workflow_dispatch`).
 
